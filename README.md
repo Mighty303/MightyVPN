@@ -100,12 +100,12 @@ govpn/
 **Goal:** Get basic project structure and development environment ready
 
 **Tasks:**
-- [ ] Initialize Go module: `go mod init github.com/yourusername/govpn`
-- [ ] Set up project directory structure
-- [ ] Create Makefile with build/test/run targets
-- [ ] Add .gitignore for Go projects
-- [ ] Write basic configuration loading (YAML)
-- [ ] Set up logging with slog
+- [X] Initialize Go module: `go mod init github.com/yourusername/govpn`
+- [X] Set up project directory structure
+- [X] Create Makefile with build/test/run targets
+- [X] Add .gitignore for Go projects
+- [X] Write basic configuration loading (YAML)
+- [X] Set up logging with slog
 
 **Deliverable:** Can build and run hello-world server/client binaries
 
@@ -123,24 +123,24 @@ govpn/
 **Implementation Steps:**
 
 1. **TUN Device Creation** (Day 3-4)
-   - [ ] Create TUN device using water library
-   - [ ] Configure IP address and routing
-   - [ ] Read IP packets from TUN device
-   - [ ] Write packets back to TUN device
-   - [ ] Test: Can read/write packets locally
+   - [X] Create TUN device using water library
+   - [X] Configure IP address and routing
+   - [X] Read IP packets from TUN device
+   - [X] Write packets back to TUN device
+   - [X] Test: Can read/write packets locally
 
 2. **UDP Communication** (Day 5-6)
-   - [ ] Set up UDP listener on server
-   - [ ] Set up UDP client connection
-   - [ ] Send/receive raw packets over UDP
-   - [ ] Test: Can send packet from client to server
+   - [X] Set up UDP listener on server
+   - [X] Set up UDP client connection
+   - [X] Send/receive raw packets over UDP
+   - [X] Test: Can send packet from client to server
 
 3. **Basic Tunnel Loop** (Day 7-9)
-   - [ ] Client: TUN → UDP → Server
-   - [ ] Server: UDP → TUN → Internet
-   - [ ] Server: Internet → TUN → UDP → Client
-   - [ ] Client: UDP → TUN → App
-   - [ ] Test: Can ping through tunnel (unencrypted)
+   - [X] Client: TUN → UDP → Server
+   - [X] Server: UDP → TUN → Internet
+   - [X] Server: Internet → TUN → UDP → Client
+   - [X] Client: UDP → TUN → App
+   - [X] Test: Can ping through tunnel (unencrypted)
 
 **Key Code Files:**
 - `internal/tunnel/tun.go` - TUN device wrapper
