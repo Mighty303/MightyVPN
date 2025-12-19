@@ -9,6 +9,7 @@ import (
 
 	"github.com/mighty303/govpn/internal/config"
 	"github.com/mighty303/govpn/internal/forwarder"
+	"github.com/mighty303/govpn/internal/tunnel"
 	"github.com/mighty303/govpn/internal/util"
 )
 
@@ -57,7 +58,7 @@ func setupUDPListener(listenAddr string) *net.UDPConn {
 }
 
 // startPacketForwarding starts bidirectional forwarding with client address tracking
-func startPacketForwarding(tun *forwarder.TUN, conn *net.UDPConn) {
+func startPacketForwarding(tun *tunnel.TUN, conn *net.UDPConn) {
 	var clientAddr *net.UDPAddr
 	var clientMutex sync.RWMutex
 
@@ -69,7 +70,7 @@ func startPacketForwarding(tun *forwarder.TUN, conn *net.UDPConn) {
 }
 
 // forwardTUNtoUDP forwards packets from TUN to the connected UDP client
-func forwardTUNtoUDP(tun *forwarder.TUN, conn *net.UDPConn, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
+func forwardTUNtoUDP(tun *tunnel.TUN, conn *net.UDPConn, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
 	buf := make([]byte, forwarder.MTU)
 	for {
 		n, err := tun.Read(buf)
@@ -97,7 +98,7 @@ func forwardTUNtoUDP(tun *forwarder.TUN, conn *net.UDPConn, clientAddr **net.UDP
 }
 
 // forwardUDPtoTUN forwards packets from UDP to TUN and learns client address
-func forwardUDPtoTUN(conn *net.UDPConn, tun *forwarder.TUN, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
+func forwardUDPtoTUN(conn *net.UDPConn, tun *tunnel.TUN, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
 	buf := make([]byte, forwarder.MTU)
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
