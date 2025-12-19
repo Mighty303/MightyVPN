@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"net"
 
 	"github.com/mighty303/govpn/internal/tunnel"
 )
@@ -17,53 +17,78 @@ func main() {
 	remoteIP := flag.String("remote-ip", "10.0.0.2", "Remote TUN IP address")
 	flag.Parse()
 
+	setupLogger()
+
+	slog.Info("Starting GoVPN Server", "listen", *listenAddr)
+
+	// 1. Create and configure TUN device
+	tun := setupTUN(*localIP, *remoteIP)
+	defer tun.Close()
+
+	// 2. Set up UDP listener
+	conn := setupUDPListener(*listenAddr)
+	defer conn.Close()
+
+	// 3. Start packet forwarding loops
+	startPacketForwarding(tun, conn)
+
+	slog.Info("Server started - Press Ctrl+C to stop")
+
+	// Wait for interrupt
+	waitForShutdown()
+
+	slog.Info("Shutting down...")
+}
+
+// setupLogger initializes the structured logger
+func setupLogger() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
+}
 
-	slog.Info("Starting GoVPN Server", "listen", *listenAddr)
-
-	// TODO: Implement server
-	// 1. Create TUN device
-	// 2. Set up UDP listener
-	// 3. Start packet forwarding loops
-	
-	// 1. Create TUN device
+// setupTUN creates and configures the TUN device
+func setupTUN(localIP, remoteIP string) *tunnel.TUN {
 	tun, err := tunnel.NewTUN()
 	if err != nil {
 		slog.Error("Failed to create TUN device", "error", err)
 		os.Exit(1)
 	}
-	defer tun.Close()
 
 	slog.Info("TUN device created", "name", tun.Name())
 
-	err = tun.Configure(*localIP, *remoteIP)
-	if err != nil {
+	if err := tun.Configure(localIP, remoteIP); err != nil {
 		slog.Error("Failed to configure TUN device", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("TUN device configured", "name", tun.Name())
 
-	// 2. Set up UDP listener
-	udpAddr, err := net.ResolveUDPAddr("udp", *listenAddr)
+	slog.Info("TUN device configured", "local", localIP, "remote", remoteIP)
+	return tun
+}
+
+// setupUDPListener creates and binds a UDP listener
+func setupUDPListener(listenAddr string) *net.UDPConn {
+	udpAddr, err := net.ResolveUDPAddr("udp", listenAddr)
 	if err != nil {
 		slog.Error("Failed to resolve UDP address", "error", err)
 		os.Exit(1)
 	}
+
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		slog.Error("Failed to listen on UDP address", "error", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
+
 	slog.Info("UDP listener started", "address", conn.LocalAddr().String())
+	return conn
+}
 
-	// 3. Start packet forwarding loops
+// startPacketForwarding starts the goroutine that reads packets from TUN
+func startPacketForwarding(tun *tunnel.TUN, conn *net.UDPConn) {
 	go func() {
-		buf := make([]byte, 1500) // MTU(Max Transmission Unit) size
-
+		buf := make([]byte, 1500) // MTU (Max Transmission Unit) size
 		for {
 			n, err := tun.Read(buf)
 			if err != nil {
@@ -71,16 +96,16 @@ func main() {
 				continue
 			}
 			slog.Debug("Read packet from TUN device", "size", n)
-			
+			// TODO: Forward packet to client via UDP
 		}
 	}()
 
-	slog.Info("Server started - Press Ctrl+C to stop")
+	// TODO: Add goroutine to read from UDP and write to TUN
+}
 
-	// Wait for interrupt
+// waitForShutdown blocks until an interrupt signal is received
+func waitForShutdown() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
-
-	slog.Info("Shutting down...")
 }
