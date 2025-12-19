@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 
-	"github.com/mighty303/govpn/internal/tunnel"
+	"github.com/mighty303/govpn/internal/config"
+	"github.com/mighty303/govpn/internal/forwarder"
+	"github.com/mighty303/govpn/internal/util"
 )
 
 func main() {
@@ -17,54 +18,24 @@ func main() {
 	remoteIP := flag.String("remote-ip", "10.0.0.2", "Remote TUN IP address")
 	flag.Parse()
 
-	setupLogger()
+	config.SetupLogger(slog.LevelDebug)
 
 	slog.Info("Starting GoVPN Server", "listen", *listenAddr)
 
 	// 1. Create and configure TUN device
-	tun := setupTUN(*localIP, *remoteIP)
+	tun := config.SetupTUN(*localIP, *remoteIP)
 	defer tun.Close()
 
 	// 2. Set up UDP listener
 	conn := setupUDPListener(*listenAddr)
 	defer conn.Close()
 
-	// 3. Start packet forwarding loops
+	// 3. Start packet forwarding with client tracking
 	startPacketForwarding(tun, conn)
 
 	slog.Info("Server started - Press Ctrl+C to stop")
 
-	// Wait for interrupt
-	waitForShutdown()
-
-	slog.Info("Shutting down...")
-}
-
-// setupLogger initializes the structured logger
-func setupLogger() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
-}
-
-// setupTUN creates and configures the TUN device
-func setupTUN(localIP, remoteIP string) *tunnel.TUN {
-	tun, err := tunnel.NewTUN()
-	if err != nil {
-		slog.Error("Failed to create TUN device", "error", err)
-		os.Exit(1)
-	}
-
-	slog.Info("TUN device created", "name", tun.Name())
-
-	if err := tun.Configure(localIP, remoteIP); err != nil {
-		slog.Error("Failed to configure TUN device", "error", err)
-		os.Exit(1)
-	}
-
-	slog.Info("TUN device configured", "local", localIP, "remote", remoteIP)
-	return tun
+	util.WaitForShutdown()
 }
 
 // setupUDPListener creates and binds a UDP listener
@@ -85,27 +56,72 @@ func setupUDPListener(listenAddr string) *net.UDPConn {
 	return conn
 }
 
-// startPacketForwarding starts the goroutine that reads packets from TUN
-func startPacketForwarding(tun *tunnel.TUN, conn *net.UDPConn) {
-	go func() {
-		buf := make([]byte, 1500) // MTU (Max Transmission Unit) size
-		for {
-			n, err := tun.Read(buf)
-			if err != nil {
-				slog.Error("Error reading from TUN device", "error", err)
-				continue
-			}
-			slog.Debug("Read packet from TUN device", "size", n)
-			// TODO: Forward packet to client via UDP
-		}
-	}()
+// startPacketForwarding starts bidirectional forwarding with client address tracking
+func startPacketForwarding(tun *forwarder.TUN, conn *net.UDPConn) {
+	var clientAddr *net.UDPAddr
+	var clientMutex sync.RWMutex
 
-	// TODO: Add goroutine to read from UDP and write to TUN
+	// Goroutine 1: TUN → UDP (with client address checking)
+	go forwardTUNtoUDP(tun, conn, &clientAddr, &clientMutex)
+
+	// Goroutine 2: UDP → TUN (with client address learning)
+	go forwardUDPtoTUN(conn, tun, &clientAddr, &clientMutex)
 }
 
-// waitForShutdown blocks until an interrupt signal is received
-func waitForShutdown() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
+// forwardTUNtoUDP forwards packets from TUN to the connected UDP client
+func forwardTUNtoUDP(tun *forwarder.TUN, conn *net.UDPConn, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
+	buf := make([]byte, forwarder.MTU)
+	for {
+		n, err := tun.Read(buf)
+		if err != nil {
+			slog.Error("Error reading from TUN device", "error", err)
+			continue
+		}
+
+		mutex.RLock()
+		addr := *clientAddr
+		mutex.RUnlock()
+
+		if addr == nil {
+			slog.Debug("No client connected, dropping packet", "size", n)
+			continue
+		}
+
+		_, err = conn.WriteToUDP(buf[:n], addr)
+		if err != nil {
+			slog.Error("Error forwarding packet to client", "error", err)
+			continue
+		}
+		slog.Debug("Forwarded packet TUN → UDP", "size", n, "client", addr.String())
+	}
+}
+
+// forwardUDPtoTUN forwards packets from UDP to TUN and learns client address
+func forwardUDPtoTUN(conn *net.UDPConn, tun *forwarder.TUN, clientAddr **net.UDPAddr, mutex *sync.RWMutex) {
+	buf := make([]byte, forwarder.MTU)
+	for {
+		n, addr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			slog.Error("Error reading from UDP", "error", err)
+			continue
+		}
+
+		// Update client address
+		mutex.Lock()
+		if *clientAddr == nil {
+			slog.Info("Client connected", "address", addr.String())
+			*clientAddr = addr
+		} else if (*clientAddr).String() != addr.String() {
+			slog.Info("Client address updated", "old", (*clientAddr).String(), "new", addr.String())
+			*clientAddr = addr
+		}
+		mutex.Unlock()
+
+		_, err = tun.Write(buf[:n])
+		if err != nil {
+			slog.Error("Error writing to TUN device", "error", err)
+			continue
+		}
+		slog.Debug("Forwarded packet UDP → TUN", "size", n, "from", addr.String())
+	}
 }
