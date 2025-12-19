@@ -150,7 +150,7 @@ govpn/
 **Success Criteria:**
 - Client can ping 8.8.8.8 through VPN server
 - Server forwards traffic to internet and back
-- No encryption yet (that's Phase 2)
+- No encryption yet (Phase 2)
 
 ---
 
@@ -444,49 +444,6 @@ sudo iptables -t nat -L -v
 - Check firewall allows UDP on VPN port
 - Verify server is listening: `netstat -ulnp | grep 8080`
 - Check client can reach server: `nc -zvu server_ip 8080`
-
----
-
-## Resume Talking Points
-
-When you complete this project, highlight:
-
-### Technical Achievements
-- "Implemented custom VPN protocol in Go using UDP with AES-256-GCM achieving X Mbps throughput"
-- "Designed secure key exchange using Diffie-Hellman with forward secrecy"
-- "Built concurrent packet processing pipeline using goroutines and channels"
-- "Implemented replay protection using sliding window algorithm"
-
-### Systems Understanding
-- "Deep understanding of TCP/IP stack, routing, and NAT"
-- "Experience with TUN devices and kernel-level networking"
-- "Knowledge of cryptographic protocols and secure communications"
-- "Practical experience with distributed systems patterns"
-
-### Production Engineering
-- "Added comprehensive observability with Prometheus metrics"
-- "Implemented graceful connection handling and automatic recovery"
-- "Built configuration management and deployment automation"
-
----
-
-## Next Steps
-
-1. **Start Phase 0:** Set up project structure today
-2. **Daily Goal:** Commit something every day, even if small
-3. **Learn as You Go:** Don't try to understand everything upfront
-4. **Test Continuously:** Write tests for each component
-5. **Document:** Write comments explaining why, not just what
-
-**First Command to Run:**
-```bash
-mkdir -p govpn/{cmd/{server,client},internal/{tunnel,crypto,protocol,connection,router,config},configs,scripts,docs}
-cd govpn
-go mod init github.com/yourusername/govpn
-touch README.md  # Paste this document
-```
-
-Good luck! This is a challenging but incredibly rewarding project. You'll learn more from this than from 10 tutorials.
 
 ---
 
